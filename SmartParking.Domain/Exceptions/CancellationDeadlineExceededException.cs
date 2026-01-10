@@ -1,12 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿namespace SmartParking.Domain.Exceptions;
 
-namespace SmartParking.Domain.Exceptions
+public class CancellationDeadlineExceededException : Exception
 {
-    internal class CancellationDeadlineExceededException
-    {
-    }
+    public CancellationDeadlineExceededException(string message) : base(message) { }
+    public CancellationDeadlineExceededException(string message, Exception inner) : base(message, inner) { }
 }

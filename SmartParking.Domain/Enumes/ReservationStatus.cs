@@ -1,12 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿namespace SmartParking.Domain.Enums;
 
-namespace SmartParking.Domain.Enumes
+public enum ReservationStatus
 {
-    internal class ReservationStatus
-    {
-    }
+    Pending = 0,
+    Confirmed = 1,
+    Cancelled = 2,
+    Completed = 3
 }
