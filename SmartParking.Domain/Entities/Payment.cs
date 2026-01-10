@@ -1,5 +1,6 @@
 ﻿using System;
 using SmartParking.Domain.Enums;
+using SmartParking.Domain.Exceptions;
 
 namespace SmartParking.Domain.Entities
 {
@@ -14,7 +15,10 @@ namespace SmartParking.Domain.Entities
         public Payment(Guid reservationId, decimal amount)
         {
             if (amount <= 0)
-                throw new ArgumentException("Amount must be greater than zero.");
+                throw new InvalidPaymentException("Payment amount must be greater than zero.");
+
+            if (reservationId == Guid.Empty)
+                throw new InvalidPaymentException("Reservation ID is required.");
 
             Id = Guid.NewGuid();
             ReservationId = reservationId;
