@@ -1,6 +1,6 @@
 ﻿using SmartParking.Domain.Entities;
 using SmartParking.Domain.Enums;
-using System;
+using System.Collections.Generic;
 
 namespace SmartParking.DataAccess.Repositories
 {
@@ -9,6 +9,7 @@ namespace SmartParking.DataAccess.Repositories
         Guid Create(Payment payment);
         Payment GetById(Guid id);
         Payment GetByReservationId(Guid reservationId);
+        List<Payment> GetByUserId(Guid userId);
         void UpdateStatus(Guid id, PaymentStatus status);
     }
 }

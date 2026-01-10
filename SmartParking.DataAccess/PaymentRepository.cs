@@ -1,9 +1,10 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Data;
-using System.Data.SqlClient;
+using Microsoft.Data.SqlClient; 
+using SmartParking.DataAccess.Repositories;
 using SmartParking.Domain.Entities;
 using SmartParking.Domain.Enums;
-using SmartParking.DataAccess.Repositories;
 
 namespace SmartParking.DataAccess
 {
@@ -23,11 +24,9 @@ namespace SmartParking.DataAccess
             {
                 cmd.CommandType = CommandType.StoredProcedure;
 
-                // Input Parameters
                 cmd.Parameters.AddWithValue("@ReservationId", payment.ReservationId);
                 cmd.Parameters.AddWithValue("@Amount", payment.Amount);
 
-                // Output Parameter
                 var outputId = new SqlParameter("@PaymentId", SqlDbType.UniqueIdentifier)
                 {
                     Direction = ParameterDirection.Output
@@ -38,20 +37,6 @@ namespace SmartParking.DataAccess
                 cmd.ExecuteNonQuery();
 
                 return (Guid)outputId.Value;
-            }
-        }
-
-        public void UpdateStatus(Guid id, PaymentStatus status)
-        {
-            using (var conn = new SqlConnection(_connectionString))
-            using (var cmd = new SqlCommand("sp_UpdatePaymentStatus", conn))
-            {
-                cmd.CommandType = CommandType.StoredProcedure;
-                cmd.Parameters.AddWithValue("@PaymentId", id);
-                cmd.Parameters.AddWithValue("@PaymentStatus", status.ToString());
-
-                conn.Open();
-                cmd.ExecuteNonQuery();
             }
         }
 
@@ -68,14 +53,7 @@ namespace SmartParking.DataAccess
                 {
                     if (reader.Read())
                     {
-                        return new Payment
-                        {
-                            Id = (Guid)reader["Id"],
-                            ReservationId = (Guid)reader["ReservationId"],
-                            Amount = (decimal)reader["Amount"],
-                            PaymentStatus = (PaymentStatus)Enum.Parse(typeof(PaymentStatus), reader["PaymentStatus"].ToString()),
-                            CreatedAt = (DateTime)reader["CreatedAt"]
-                        };
+                        return MapReaderToPayment(reader);
                     }
                 }
             }
@@ -84,7 +62,71 @@ namespace SmartParking.DataAccess
 
         public Payment GetByReservationId(Guid reservationId)
         {
-            throw new NotImplementedException();
+            using (var conn = new SqlConnection(_connectionString))
+            using (var cmd = new SqlCommand("sp_GetPaymentByReservationId", conn))
+            {
+                cmd.CommandType = CommandType.StoredProcedure;
+                cmd.Parameters.AddWithValue("@ReservationId", reservationId);
+                conn.Open();
+
+                using (var reader = cmd.ExecuteReader())
+                {
+                    if (reader.Read())
+                    {
+                        return MapReaderToPayment(reader);
+                    }
+                }
+            }
+            return null;
+        }
+
+        public List<Payment> GetByUserId(Guid userId)
+        {
+            var payments = new List<Payment>();
+
+            using (var conn = new SqlConnection(_connectionString))
+            using (var cmd = new SqlCommand("sp_GetPaymentsByUserId", conn))
+            {
+                cmd.CommandType = CommandType.StoredProcedure;
+                cmd.Parameters.AddWithValue("@UserId", userId);
+                conn.Open();
+
+                using (var reader = cmd.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        payments.Add(MapReaderToPayment(reader));
+                    }
+                }
+            }
+
+            return payments;
+        }
+
+        public void UpdateStatus(Guid id, PaymentStatus status)
+        {
+            using (var conn = new SqlConnection(_connectionString))
+            using (var cmd = new SqlCommand("sp_UpdatePaymentStatus", conn))
+            {
+                cmd.CommandType = CommandType.StoredProcedure;
+                cmd.Parameters.AddWithValue("@PaymentId", id);
+                cmd.Parameters.AddWithValue("@PaymentStatus", status.ToString());
+
+                conn.Open();
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        private Payment MapReaderToPayment(SqlDataReader reader)
+        {
+            return new Payment
+            {
+                Id = (Guid)reader["Id"],
+                ReservationId = (Guid)reader["ReservationId"],
+                Amount = (decimal)reader["Amount"],
+                PaymentStatus = (PaymentStatus)Enum.Parse(typeof(PaymentStatus), reader["PaymentStatus"].ToString()),
+                CreatedAt = (DateTime)reader["CreatedAt"]
+            };
         }
     }
 }
