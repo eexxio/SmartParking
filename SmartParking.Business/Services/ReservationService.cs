@@ -150,4 +150,23 @@ public class ReservationService : IReservationService
             throw;
         }
     }
+
+
+    public Reservation GetReservation(Guid reservationId)
+    {
+        try
+        {
+            var reservation = _reservationRepository.GetById(reservationId);
+            if (reservation is null)
+            {
+                throw new InvalidReservationException($"Reservation with ID {reservationId} not found.");
+            }
+            return reservation;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting reservation {ReservationId}", reservationId);
+            throw;
+        }
+    }
 }

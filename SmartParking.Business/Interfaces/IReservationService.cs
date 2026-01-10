@@ -13,4 +13,6 @@ public interface IReservationService
     IReadOnlyList<Reservation> GetUserReservations(Guid userId);
 
     int CheckAndApplyTimeoutPenalties();
+
+    Reservation GetReservation(Guid reservationId);
 }

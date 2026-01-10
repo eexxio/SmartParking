@@ -1,132 +1,191 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
-using Microsoft.Data.SqlClient; 
-using SmartParking.DataAccess.Repositories;
+using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Configuration;
 using SmartParking.Domain.Entities;
 using SmartParking.Domain.Enums;
+using SmartParking.Domain.Exceptions;
 
-namespace SmartParking.DataAccess
+namespace SmartParking.DataAccess.Repositories
 {
     public class PaymentRepository : IPaymentRepository
     {
         private readonly string _connectionString;
 
-        public PaymentRepository(string connectionString)
+        public PaymentRepository(IConfiguration configuration)
         {
-            _connectionString = connectionString;
+            _connectionString = configuration.GetConnectionString("DefaultConnection");
         }
 
         public Guid Create(Payment payment)
         {
-            using (var conn = new SqlConnection(_connectionString))
-            using (var cmd = new SqlCommand("sp_CreatePayment", conn))
+            try
             {
-                cmd.CommandType = CommandType.StoredProcedure;
-
-                cmd.Parameters.AddWithValue("@ReservationId", payment.ReservationId);
-                cmd.Parameters.AddWithValue("@Amount", payment.Amount);
-
-                var outputId = new SqlParameter("@PaymentId", SqlDbType.UniqueIdentifier)
+                using (var connection = new SqlConnection(_connectionString))
                 {
-                    Direction = ParameterDirection.Output
-                };
-                cmd.Parameters.Add(outputId);
+                    using (var command = new SqlCommand("sp_CreatePayment", connection))
+                    {
+                        command.CommandType = CommandType.StoredProcedure;
 
-                conn.Open();
-                cmd.ExecuteNonQuery();
+                        command.Parameters.AddWithValue("@ReservationId", payment.ReservationId);
+                        command.Parameters.AddWithValue("@Amount", payment.Amount);
 
-                return (Guid)outputId.Value;
+                        var paymentIdParam = new SqlParameter("@PaymentId", SqlDbType.UniqueIdentifier)
+                        {
+                            Direction = ParameterDirection.Output
+                        };
+                        command.Parameters.Add(paymentIdParam);
+
+                        connection.Open();
+                        command.ExecuteNonQuery();
+
+                        return (Guid)paymentIdParam.Value;
+                    }
+                }
+            }
+            catch (SqlException ex)
+            {
+                if (ex.Number == 50301)
+                    throw new InvalidPaymentException("Payment amount must be greater than 0");
+                if (ex.Number == 50302)
+                    throw new PaymentNotFoundException("Reservation not found");
+                if (ex.Number == 50303)
+                    throw new InvalidPaymentException("Payment already completed for this reservation");
+
+                throw new PaymentProcessingException("Error creating payment", ex);
             }
         }
 
         public Payment GetById(Guid id)
         {
-            using (var conn = new SqlConnection(_connectionString))
-            using (var cmd = new SqlCommand("sp_GetPaymentById", conn))
+            try
             {
-                cmd.CommandType = CommandType.StoredProcedure;
-                cmd.Parameters.AddWithValue("@PaymentId", id);
-                conn.Open();
-
-                using (var reader = cmd.ExecuteReader())
+                using (var connection = new SqlConnection(_connectionString))
                 {
-                    if (reader.Read())
+                    using (var command = new SqlCommand("sp_GetPaymentById", connection))
                     {
-                        return MapReaderToPayment(reader);
+                        command.CommandType = CommandType.StoredProcedure;
+                        command.Parameters.AddWithValue("@PaymentId", id);
+
+                        connection.Open();
+                        using (var reader = command.ExecuteReader())
+                        {
+                            if (reader.Read())
+                            {
+                                return MapPaymentFromReader(reader);
+                            }
+                        }
                     }
                 }
+                return null;
             }
-            return null;
+            catch (SqlException ex)
+            {
+                throw new PaymentProcessingException($"Error retrieving payment with ID {id}", ex);
+            }
         }
 
         public Payment GetByReservationId(Guid reservationId)
         {
-            using (var conn = new SqlConnection(_connectionString))
-            using (var cmd = new SqlCommand("sp_GetPaymentByReservationId", conn))
+            try
             {
-                cmd.CommandType = CommandType.StoredProcedure;
-                cmd.Parameters.AddWithValue("@ReservationId", reservationId);
-                conn.Open();
-
-                using (var reader = cmd.ExecuteReader())
+                using (var connection = new SqlConnection(_connectionString))
                 {
-                    if (reader.Read())
+                    using (var command = new SqlCommand("sp_GetPaymentByReservationId", connection))
                     {
-                        return MapReaderToPayment(reader);
+                        command.CommandType = CommandType.StoredProcedure;
+                        command.Parameters.AddWithValue("@ReservationId", reservationId);
+
+                        connection.Open();
+                        using (var reader = command.ExecuteReader())
+                        {
+                            if (reader.Read())
+                            {
+                                return MapPaymentFromReader(reader);
+                            }
+                        }
                     }
                 }
+                return null;
             }
-            return null;
+            catch (SqlException ex)
+            {
+                throw new PaymentProcessingException($"Error retrieving payment for reservation {reservationId}", ex);
+            }
         }
 
         public List<Payment> GetByUserId(Guid userId)
         {
             var payments = new List<Payment>();
 
-            using (var conn = new SqlConnection(_connectionString))
-            using (var cmd = new SqlCommand("sp_GetPaymentsByUserId", conn))
+            try
             {
-                cmd.CommandType = CommandType.StoredProcedure;
-                cmd.Parameters.AddWithValue("@UserId", userId);
-                conn.Open();
-
-                using (var reader = cmd.ExecuteReader())
+                using (var connection = new SqlConnection(_connectionString))
                 {
-                    while (reader.Read())
+                    using (var command = new SqlCommand("sp_GetPaymentsByUserId", connection))
                     {
-                        payments.Add(MapReaderToPayment(reader));
+                        command.CommandType = CommandType.StoredProcedure;
+                        command.Parameters.AddWithValue("@UserId", userId);
+
+                        connection.Open();
+                        using (var reader = command.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                payments.Add(MapPaymentFromReader(reader));
+                            }
+                        }
                     }
                 }
+                return payments;
             }
-
-            return payments;
+            catch (SqlException ex)
+            {
+                throw new PaymentProcessingException($"Error retrieving payments for user {userId}", ex);
+            }
         }
 
         public void UpdateStatus(Guid id, PaymentStatus status)
         {
-            using (var conn = new SqlConnection(_connectionString))
-            using (var cmd = new SqlCommand("sp_UpdatePaymentStatus", conn))
+            try
             {
-                cmd.CommandType = CommandType.StoredProcedure;
-                cmd.Parameters.AddWithValue("@PaymentId", id);
-                cmd.Parameters.AddWithValue("@PaymentStatus", status.ToString());
+                using (var connection = new SqlConnection(_connectionString))
+                {
+                    using (var command = new SqlCommand("sp_UpdatePaymentStatus", connection))
+                    {
+                        command.CommandType = CommandType.StoredProcedure;
+                        command.Parameters.AddWithValue("@PaymentId", id);
+                        command.Parameters.AddWithValue("@PaymentStatus", status.ToString());
 
-                conn.Open();
-                cmd.ExecuteNonQuery();
+                        connection.Open();
+                        command.ExecuteNonQuery();
+                    }
+                }
+            }
+            catch (SqlException ex)
+            {
+                if (ex.Number == 50304)
+                    throw new InvalidPaymentException("Invalid payment status");
+                if (ex.Number == 50305)
+                    throw new PaymentNotFoundException(id);
+
+                throw new PaymentProcessingException($"Error updating payment status for ID {id}", ex);
             }
         }
 
-        private Payment MapReaderToPayment(SqlDataReader reader)
+        private Payment MapPaymentFromReader(SqlDataReader reader)
         {
-            return new Payment
+            var payment = new Payment
             {
-                Id = (Guid)reader["Id"],
-                ReservationId = (Guid)reader["ReservationId"],
-                Amount = (decimal)reader["Amount"],
-                PaymentStatus = (PaymentStatus)Enum.Parse(typeof(PaymentStatus), reader["PaymentStatus"].ToString()),
-                CreatedAt = (DateTime)reader["CreatedAt"]
+                Id = reader.GetGuid(reader.GetOrdinal("Id")),
+                ReservationId = reader.GetGuid(reader.GetOrdinal("ReservationId")),
+                Amount = reader.GetDecimal(reader.GetOrdinal("Amount")),
+                PaymentStatus = Enum.Parse<PaymentStatus>(reader.GetString(reader.GetOrdinal("PaymentStatus"))),
+                CreatedAt = reader.GetDateTime(reader.GetOrdinal("CreatedAt"))
             };
+
+            return payment;
         }
     }
 }

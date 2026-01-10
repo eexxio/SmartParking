@@ -57,6 +57,11 @@ public class Reservation
         CreatedAt = createdAt;
     }
 
+    public Reservation()
+    {
+
+    }
+
     public bool CanCancel(DateTime now)
     {
         return now <= CancellationDeadline;
