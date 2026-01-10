@@ -1,12 +1,16 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using SmartParking.Domain.Entities;
 
-namespace SmartParking.Business.Interfaces
+namespace SmartParking.Business.Interfaces;
+
+public interface IReservationService
 {
-    internal interface IReservationService
-    {
-    }
+    Reservation CreateReservation(Guid userId, Guid spotId, int cancellationTimeoutMinutes = 15);
+
+    void ConfirmReservation(Guid reservationId);
+    void CancelReservation(Guid reservationId);
+    void CompleteReservation(Guid reservationId);
+
+    IReadOnlyList<Reservation> GetUserReservations(Guid userId);
+
+    int CheckAndApplyTimeoutPenalties();
 }

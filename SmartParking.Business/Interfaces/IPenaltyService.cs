@@ -1,12 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using SmartParking.Domain.Entities;
 
-namespace SmartParking.Business.Interfaces
+namespace SmartParking.Business.Interfaces;
+
+public interface IPenaltyService
 {
-    internal interface IPenaltyService
-    {
-    }
+    Penalty ApplyPenalty(Guid reservationId, decimal amount, string reason);
+    IReadOnlyList<Penalty> GetUserPenalties(Guid userId);
+    IReadOnlyList<Penalty> GetReservationPenalties(Guid reservationId);
 }
