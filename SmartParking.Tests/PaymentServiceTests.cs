@@ -137,7 +137,8 @@ namespace SmartParking.Tests
             );
 
             _mockReservation.Setup(r => r.GetReservation(resId)).Returns(reservation);
-            _mockSpot.Setup(s => s.GetSpot(spotId)).Returns(new ParkingSpot { HourlyRate = 10m });
+            _mockSpot.Setup(s => s.GetSpot(spotId)).Returns(
+                new ParkingSpot(Guid.NewGuid(), "A-001", "Regular", 10m, false, DateTime.UtcNow));
 
             decimal amount = _service.CalculatePaymentAmount(resId);
 
@@ -357,7 +358,7 @@ namespace SmartParking.Tests
 
         private void SetupSpot(decimal rate)
         {
-            var fakeSpot = new ParkingSpot { HourlyRate = rate };
+            var fakeSpot = new ParkingSpot(Guid.NewGuid(), "A-001", "Regular", rate, false, DateTime.UtcNow);
             _mockSpot.Setup(s => s.GetSpot(It.IsAny<Guid>())).Returns(fakeSpot);
         }
     }

@@ -84,12 +84,7 @@ namespace SmartParking.Tests
 
             mockReservation.Setup(r => r.GetReservation(reservationId)).Returns(reservation);
 
-            var spot = new ParkingSpot
-            {
-                Id = spotId,
-                SpotNumber = "A-123",
-                HourlyRate = 10m
-            };
+            var spot = new ParkingSpot(spotId, "A-123", "Regular", 10m, false, DateTime.UtcNow);
 
             mockSpot.Setup(s => s.GetSpot(spotId)).Returns(spot);
 
