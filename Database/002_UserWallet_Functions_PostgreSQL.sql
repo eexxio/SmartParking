@@ -72,9 +72,9 @@ CREATE OR REPLACE FUNCTION sp_get_user_by_id(
 ) AS $$
 BEGIN
     RETURN QUERY
-    SELECT Id, Email, FullName, IsEVUser, IsActive, CreatedAt
-    FROM Users
-    WHERE Id = p_user_id;
+    SELECT u.Id, u.Email, u.FullName, u.IsEVUser, u.IsActive, u.CreatedAt
+    FROM Users u
+    WHERE u.Id = p_user_id;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -96,9 +96,9 @@ CREATE OR REPLACE FUNCTION sp_get_user_by_email(
 ) AS $$
 BEGIN
     RETURN QUERY
-    SELECT Id, Email, FullName, IsEVUser, IsActive, CreatedAt
-    FROM Users
-    WHERE Email = p_email;
+    SELECT u.Id, u.Email, u.FullName, u.IsEVUser, u.IsActive, u.CreatedAt
+    FROM Users u
+    WHERE u.Email = p_email;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -148,10 +148,10 @@ RETURNS TABLE (
 ) AS $$
 BEGIN
     RETURN QUERY
-    SELECT Id, Email, FullName, IsEVUser, IsActive, CreatedAt
-    FROM Users
-    WHERE IsActive = TRUE
-    ORDER BY CreatedAt DESC;
+    SELECT u.Id, u.Email, u.FullName, u.IsEVUser, u.IsActive, u.CreatedAt
+    FROM Users u
+    WHERE u.IsActive = TRUE
+    ORDER BY u.CreatedAt DESC;
 END;
 $$ LANGUAGE plpgsql;
 

@@ -60,9 +60,9 @@ CREATE OR REPLACE FUNCTION sp_get_parking_spot_by_id(
 ) AS $$
 BEGIN
     RETURN QUERY
-    SELECT Id, SpotNumber, SpotType, IsOccupied, HourlyRate, CreatedAt
-    FROM ParkingSpots
-    WHERE Id = p_spot_id;
+    SELECT ps.Id, ps.SpotNumber, ps.SpotType, ps.IsOccupied, ps.HourlyRate, ps.CreatedAt
+    FROM ParkingSpots ps
+    WHERE ps.Id = p_spot_id;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -83,9 +83,9 @@ RETURNS TABLE (
 ) AS $$
 BEGIN
     RETURN QUERY
-    SELECT Id, SpotNumber, SpotType, IsOccupied, HourlyRate, CreatedAt
-    FROM ParkingSpots
-    ORDER BY SpotNumber;
+    SELECT ps.Id, ps.SpotNumber, ps.SpotType, ps.IsOccupied, ps.HourlyRate, ps.CreatedAt
+    FROM ParkingSpots ps
+    ORDER BY ps.SpotNumber;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -106,10 +106,10 @@ RETURNS TABLE (
 ) AS $$
 BEGIN
     RETURN QUERY
-    SELECT Id, SpotNumber, SpotType, IsOccupied, HourlyRate, CreatedAt
-    FROM ParkingSpots
-    WHERE IsOccupied = FALSE
-    ORDER BY SpotType, SpotNumber;
+    SELECT ps.Id, ps.SpotNumber, ps.SpotType, ps.IsOccupied, ps.HourlyRate, ps.CreatedAt
+    FROM ParkingSpots ps
+    WHERE ps.IsOccupied = FALSE
+    ORDER BY ps.SpotType, ps.SpotNumber;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -136,10 +136,10 @@ BEGIN
     END IF;
 
     RETURN QUERY
-    SELECT Id, SpotNumber, SpotType, IsOccupied, HourlyRate, CreatedAt
-    FROM ParkingSpots
-    WHERE IsOccupied = FALSE AND SpotType = p_spot_type
-    ORDER BY SpotNumber;
+    SELECT ps.Id, ps.SpotNumber, ps.SpotType, ps.IsOccupied, ps.HourlyRate, ps.CreatedAt
+    FROM ParkingSpots ps
+    WHERE ps.IsOccupied = FALSE AND ps.SpotType = p_spot_type
+    ORDER BY ps.SpotNumber;
 END;
 $$ LANGUAGE plpgsql;
 
