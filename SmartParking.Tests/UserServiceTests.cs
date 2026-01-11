@@ -1,7 +1,8 @@
 using Microsoft.Extensions.Logging;
 using Moq;
-using SmartParking.Business;
-using SmartParking.DataAccess;
+using SmartParking.Application.Interfaces;
+using SmartParking.Application.Services;
+using SmartParking.Infrastructure.Interfaces;
 using SmartParking.Domain;
 using SmartParking.Domain.Exceptions;
 

@@ -1,8 +1,8 @@
 ﻿using Moq;
-using SmartParking.Business;
-using SmartParking.Business.Interfaces;
-using SmartParking.Business.Services;
-using SmartParking.DataAccess.Repositories;
+using SmartParking.Application.Interfaces;
+using SmartParking.Application.Services;
+using SmartParking.Infrastructure.Interfaces;
+using SmartParking.Infrastructure.Repositories;
 using SmartParking.Domain.Entities;
 using SmartParking.Domain.Enums;
 using SmartParking.Domain.Exceptions;

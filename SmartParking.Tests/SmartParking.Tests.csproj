@@ -21,8 +21,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SmartParking.Domain\SmartParking.Domain.csproj" />
-    <ProjectReference Include="..\SmartParking.DataAccess\SmartParking.DataAccess.csproj" />
-    <ProjectReference Include="..\SmartParking.Business\SmartParking.Business.csproj" />
+    <ProjectReference Include="..\SmartParking.Infrastructure\SmartParking.Infrastructure.csproj" />
+    <ProjectReference Include="..\SmartParking.Application\SmartParking.Application.csproj" />
+    <ProjectReference Include="..\SmartParking.Api\SmartParking.Api.csproj" />
   </ItemGroup>
 
 </Project>
