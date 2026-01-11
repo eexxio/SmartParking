@@ -18,7 +18,7 @@ CREATE OR REPLACE FUNCTION sp_create_reservation(
 ) AS $$
 BEGIN
     -- Check if user exists
-    IF NOT EXISTS (SELECT 1 FROM Users WHERE Id = p_user_id) THEN
+    IF NOT EXISTS (SELECT 1 WHERE u. WHERE Id = p_user_id) THEN
         RAISE EXCEPTION 'User not found' USING ERRCODE = '45201';
     END IF;
 

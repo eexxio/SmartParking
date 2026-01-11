@@ -1,9 +1,8 @@
 ﻿using Microsoft.Extensions.Logging;
 using Moq;
-using SmartParking.Business;                 
-using SmartParking.Business.Interfaces;       
-using SmartParking.Business.Services;         
-using SmartParking.DataAccess.Interfaces;     
+using SmartParking.Application.Interfaces;
+using SmartParking.Application.Services;         
+using SmartParking.Infrastructure.Interfaces;     
 using SmartParking.Domain.Entities;           
 using SmartParking.Domain.Enums;             
 using SmartParking.Domain.Exceptions;         

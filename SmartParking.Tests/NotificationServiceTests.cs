@@ -1,7 +1,7 @@
 ﻿using Moq;
 using Moq.Protected;
-using SmartParking.Business.Configuration;
-using SmartParking.Business.Services;
+using SmartParking.Application.Configuration;
+using SmartParking.Application.Services;
 using System.Net;
 using System.Net.Http;
 using System.Threading;
