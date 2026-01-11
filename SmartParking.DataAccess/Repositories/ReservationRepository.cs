@@ -1,4 +1,4 @@
-﻿using Microsoft.Data.SqlClient;
+using Npgsql;
 using SmartParking.DataAccess.Interfaces;
 using SmartParking.Domain.Entities;
 using SmartParking.Domain.Enums;
@@ -20,21 +20,20 @@ public class ReservationRepository : IReservationRepository
     {
         try
         {
-            using var connection = new SqlConnection(_connectionString);
-            using var command = new SqlCommand("sp_ValidateSpotForUser", connection);
-            command.CommandType = CommandType.StoredProcedure;
+            using var connection = new NpgsqlConnection(_connectionString);
+            using var command = new NpgsqlCommand("SELECT * FROM sp_validate_spot_for_user(@p_spot_id, @p_is_ev_user)", connection);
 
-            command.Parameters.AddWithValue("@SpotId", spotId);
-            command.Parameters.AddWithValue("@IsEVUser", isEVUser);
+            command.Parameters.AddWithValue("p_spot_id", spotId);
+            command.Parameters.AddWithValue("p_is_ev_user", isEVUser);
 
             connection.Open();
             command.ExecuteNonQuery();
         }
-        catch (SqlException ex) when (ex.Number >= 50101 && ex.Number <= 50199)
+        catch (PostgresException ex) when (ex.SqlState is "45101" or "45102" or "45103" or "45104" or "45105" or "45106" or "45107")
         {
             throw new InvalidReservationException(ex.Message, ex);
         }
-        catch (SqlException ex)
+        catch (PostgresException ex)
         {
             throw new InvalidOperationException($"DB error validating spot: {ex.Message}", ex);
         }
@@ -44,33 +43,32 @@ public class ReservationRepository : IReservationRepository
     {
         try
         {
-            using var connection = new SqlConnection(_connectionString);
-            using var command = new SqlCommand("sp_CreateReservation", connection);
-            command.CommandType = CommandType.StoredProcedure;
+            using var connection = new NpgsqlConnection(_connectionString);
+            using var command = new NpgsqlCommand(
+                "SELECT * FROM sp_create_reservation(@p_user_id, @p_spot_id, @p_cancellation_timeout_minutes)",
+                connection);
 
-            command.Parameters.AddWithValue("@UserId", userId);
-            command.Parameters.AddWithValue("@SpotId", spotId);
-            command.Parameters.AddWithValue("@CancellationTimeoutMinutes", cancellationTimeoutMinutes);
-
-            var reservationIdParam = new SqlParameter("@ReservationId", SqlDbType.UniqueIdentifier)
-            {
-                Direction = ParameterDirection.Output
-            };
-            command.Parameters.Add(reservationIdParam);
+            command.Parameters.AddWithValue("p_user_id", userId);
+            command.Parameters.AddWithValue("p_spot_id", spotId);
+            command.Parameters.AddWithValue("p_cancellation_timeout_minutes", cancellationTimeoutMinutes);
 
             connection.Open();
-            command.ExecuteNonQuery();
+            using var reader = command.ExecuteReader();
 
-            var reservationId = (Guid)reservationIdParam.Value;
+            if (reader.Read())
+            {
+                var reservationId = reader.GetGuid(reader.GetOrdinal("reservation_id"));
+                return GetById(reservationId)
+                       ?? throw new InvalidOperationException("Reservation created but could not be loaded.");
+            }
 
-            return GetById(reservationId)
-                   ?? throw new InvalidOperationException("Reservation created but could not be loaded.");
+            throw new InvalidOperationException("Failed to create reservation");
         }
-        catch (SqlException ex) when (ex.Number is 50201 or 50202 or 50203)
+        catch (PostgresException ex) when (ex.SqlState is "45201" or "45202" or "45203")
         {
             throw new InvalidReservationException(ex.Message, ex);
         }
-        catch (SqlException ex)
+        catch (PostgresException ex)
         {
             throw new InvalidOperationException($"DB error creating reservation: {ex.Message}", ex);
         }
@@ -80,11 +78,10 @@ public class ReservationRepository : IReservationRepository
     {
         try
         {
-            using var connection = new SqlConnection(_connectionString);
-            using var command = new SqlCommand("sp_GetReservationById", connection);
-            command.CommandType = CommandType.StoredProcedure;
+            using var connection = new NpgsqlConnection(_connectionString);
+            using var command = new NpgsqlCommand("SELECT * FROM sp_get_reservation_by_id(@p_reservation_id)", connection);
 
-            command.Parameters.AddWithValue("@ReservationId", reservationId);
+            command.Parameters.AddWithValue("p_reservation_id", reservationId);
 
             connection.Open();
             using var reader = command.ExecuteReader();
@@ -94,7 +91,7 @@ public class ReservationRepository : IReservationRepository
 
             return MapReservation(reader);
         }
-        catch (SqlException ex)
+        catch (PostgresException ex)
         {
             throw new InvalidOperationException($"DB error getting reservation: {ex.Message}", ex);
         }
@@ -106,11 +103,10 @@ public class ReservationRepository : IReservationRepository
         {
             var list = new List<Reservation>();
 
-            using var connection = new SqlConnection(_connectionString);
-            using var command = new SqlCommand("sp_GetReservationsByUserId", connection);
-            command.CommandType = CommandType.StoredProcedure;
+            using var connection = new NpgsqlConnection(_connectionString);
+            using var command = new NpgsqlCommand("SELECT * FROM sp_get_reservations_by_user_id(@p_user_id)", connection);
 
-            command.Parameters.AddWithValue("@UserId", userId);
+            command.Parameters.AddWithValue("p_user_id", userId);
 
             connection.Open();
             using var reader = command.ExecuteReader();
@@ -122,7 +118,7 @@ public class ReservationRepository : IReservationRepository
 
             return list;
         }
-        catch (SqlException ex)
+        catch (PostgresException ex)
         {
             throw new InvalidOperationException($"DB error getting reservations by user: {ex.Message}", ex);
         }
@@ -132,24 +128,23 @@ public class ReservationRepository : IReservationRepository
     {
         try
         {
-            using var connection = new SqlConnection(_connectionString);
-            using var command = new SqlCommand("sp_ConfirmReservation", connection);
-            command.CommandType = CommandType.StoredProcedure;
+            using var connection = new NpgsqlConnection(_connectionString);
+            using var command = new NpgsqlCommand("SELECT sp_confirm_reservation(@p_reservation_id)", connection);
 
-            command.Parameters.AddWithValue("@ReservationId", reservationId);
+            command.Parameters.AddWithValue("p_reservation_id", reservationId);
 
             connection.Open();
             command.ExecuteNonQuery();
         }
-        catch (SqlException ex) when (ex.Number == 50204)
+        catch (PostgresException ex) when (ex.SqlState == "45204")
         {
             throw new ReservationNotFoundException(ex.Message, ex);
         }
-        catch (SqlException ex) when (ex.Number == 50205)
+        catch (PostgresException ex) when (ex.SqlState == "45205")
         {
             throw new InvalidReservationException(ex.Message, ex);
         }
-        catch (SqlException ex)
+        catch (PostgresException ex)
         {
             throw new InvalidOperationException($"DB error confirming reservation: {ex.Message}", ex);
         }
@@ -159,32 +154,30 @@ public class ReservationRepository : IReservationRepository
     {
         try
         {
-            using var connection = new SqlConnection(_connectionString);
-            using var command = new SqlCommand("sp_CancelReservation", connection);
-            command.CommandType = CommandType.StoredProcedure;
+            using var connection = new NpgsqlConnection(_connectionString);
+            using var command = new NpgsqlCommand("SELECT * FROM sp_cancel_reservation(@p_reservation_id)", connection);
 
-            command.Parameters.AddWithValue("@ReservationId", reservationId);
-
-            var isLateParam = new SqlParameter("@IsLate", SqlDbType.Bit)
-            {
-                Direction = ParameterDirection.Output
-            };
-            command.Parameters.Add(isLateParam);
+            command.Parameters.AddWithValue("p_reservation_id", reservationId);
 
             connection.Open();
-            command.ExecuteNonQuery();
+            using var reader = command.ExecuteReader();
 
-            return isLateParam.Value != DBNull.Value && (bool)isLateParam.Value;
+            if (reader.Read())
+            {
+                return reader.GetBoolean(reader.GetOrdinal("is_late"));
+            }
+
+            throw new InvalidOperationException("Failed to cancel reservation");
         }
-        catch (SqlException ex) when (ex.Number == 50204)
+        catch (PostgresException ex) when (ex.SqlState == "45204")
         {
             throw new ReservationNotFoundException(ex.Message, ex);
         }
-        catch (SqlException ex) when (ex.Number == 50206)
+        catch (PostgresException ex) when (ex.SqlState == "45206")
         {
             throw new InvalidReservationException(ex.Message, ex);
         }
-        catch (SqlException ex)
+        catch (PostgresException ex)
         {
             throw new InvalidOperationException($"DB error cancelling reservation: {ex.Message}", ex);
         }
@@ -194,24 +187,23 @@ public class ReservationRepository : IReservationRepository
     {
         try
         {
-            using var connection = new SqlConnection(_connectionString);
-            using var command = new SqlCommand("sp_CompleteReservation", connection);
-            command.CommandType = CommandType.StoredProcedure;
+            using var connection = new NpgsqlConnection(_connectionString);
+            using var command = new NpgsqlCommand("SELECT sp_complete_reservation(@p_reservation_id)", connection);
 
-            command.Parameters.AddWithValue("@ReservationId", reservationId);
+            command.Parameters.AddWithValue("p_reservation_id", reservationId);
 
             connection.Open();
             command.ExecuteNonQuery();
         }
-        catch (SqlException ex) when (ex.Number == 50204)
+        catch (PostgresException ex) when (ex.SqlState == "45204")
         {
             throw new ReservationNotFoundException(ex.Message, ex);
         }
-        catch (SqlException ex) when (ex.Number == 50207)
+        catch (PostgresException ex) when (ex.SqlState == "45207")
         {
             throw new InvalidReservationException(ex.Message, ex);
         }
-        catch (SqlException ex)
+        catch (PostgresException ex)
         {
             throw new InvalidOperationException($"DB error completing reservation: {ex.Message}", ex);
         }
@@ -223,9 +215,8 @@ public class ReservationRepository : IReservationRepository
         {
             var list = new List<Reservation>();
 
-            using var connection = new SqlConnection(_connectionString);
-            using var command = new SqlCommand("sp_GetExpiredPendingReservations", connection);
-            command.CommandType = CommandType.StoredProcedure;
+            using var connection = new NpgsqlConnection(_connectionString);
+            using var command = new NpgsqlCommand("SELECT * FROM sp_get_expired_pending_reservations()", connection);
 
             connection.Open();
             using var reader = command.ExecuteReader();
@@ -233,11 +224,11 @@ public class ReservationRepository : IReservationRepository
             while (reader.Read())
             {
                 // SP returns fewer columns (no EndTime, CreatedAt). We read what we have and fill safe defaults.
-                var id = reader.GetGuid(reader.GetOrdinal("Id"));
-                var userId = reader.GetGuid(reader.GetOrdinal("UserId"));
-                var spotId = reader.GetGuid(reader.GetOrdinal("SpotId"));
-                var startTime = reader.GetDateTime(reader.GetOrdinal("StartTime"));
-                var deadline = reader.GetDateTime(reader.GetOrdinal("CancellationDeadline"));
+                var id = reader.GetGuid(reader.GetOrdinal("id"));
+                var userId = reader.GetGuid(reader.GetOrdinal("user_id"));
+                var spotId = reader.GetGuid(reader.GetOrdinal("spot_id"));
+                var startTime = reader.GetDateTime(reader.GetOrdinal("start_time"));
+                var deadline = reader.GetDateTime(reader.GetOrdinal("cancellation_deadline"));
 
                 list.Add(new Reservation(
                     id: id,
@@ -252,27 +243,27 @@ public class ReservationRepository : IReservationRepository
 
             return list;
         }
-        catch (SqlException ex)
+        catch (PostgresException ex)
         {
             throw new InvalidOperationException($"DB error getting expired reservations: {ex.Message}", ex);
         }
     }
 
-    private static Reservation MapReservation(SqlDataReader reader)
+    private static Reservation MapReservation(NpgsqlDataReader reader)
     {
-        var id = reader.GetGuid(reader.GetOrdinal("Id"));
-        var userId = reader.GetGuid(reader.GetOrdinal("UserId"));
-        var spotId = reader.GetGuid(reader.GetOrdinal("SpotId"));
-        var startTime = reader.GetDateTime(reader.GetOrdinal("StartTime"));
+        var id = reader.GetGuid(reader.GetOrdinal("id"));
+        var userId = reader.GetGuid(reader.GetOrdinal("user_id"));
+        var spotId = reader.GetGuid(reader.GetOrdinal("spot_id"));
+        var startTime = reader.GetDateTime(reader.GetOrdinal("start_time"));
 
         DateTime? endTime = null;
-        var endOrdinal = reader.GetOrdinal("EndTime");
+        var endOrdinal = reader.GetOrdinal("end_time");
         if (!reader.IsDBNull(endOrdinal))
         {
             endTime = reader.GetDateTime(endOrdinal);
         }
 
-        var statusStr = reader.GetString(reader.GetOrdinal("Status"));
+        var statusStr = reader.GetString(reader.GetOrdinal("status"));
         var status = statusStr switch
         {
             "Pending" => ReservationStatus.Pending,
@@ -282,8 +273,8 @@ public class ReservationRepository : IReservationRepository
             _ => throw new InvalidOperationException($"Unknown Status from DB: {statusStr}")
         };
 
-        var deadline = reader.GetDateTime(reader.GetOrdinal("CancellationDeadline"));
-        var createdAt = reader.GetDateTime(reader.GetOrdinal("CreatedAt"));
+        var deadline = reader.GetDateTime(reader.GetOrdinal("cancellation_deadline"));
+        var createdAt = reader.GetDateTime(reader.GetOrdinal("created_at"));
 
         return new Reservation(
             id: id,

@@ -1,4 +1,4 @@
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using SmartParking.Domain;
 using SmartParking.Domain.Exceptions;
 using System.Data;
@@ -18,21 +18,22 @@ public class WalletRepository : IWalletRepository
     {
         try
         {
-            using var connection = new SqlConnection(_connectionString);
-            using var command = new SqlCommand("INSERT INTO UserWallets (Id, UserId, Balance, UpdatedAt) VALUES (@Id, @UserId, @Balance, @UpdatedAt)", connection);
-            command.CommandType = CommandType.Text;
+            using var connection = new NpgsqlConnection(_connectionString);
+            using var command = new NpgsqlCommand(
+                "INSERT INTO UserWallets (Id, UserId, Balance, UpdatedAt) VALUES (@p_id, @p_user_id, @p_balance, @p_updated_at)",
+                connection);
 
-            command.Parameters.AddWithValue("@Id", wallet.Id);
-            command.Parameters.AddWithValue("@UserId", wallet.UserId);
-            command.Parameters.AddWithValue("@Balance", wallet.Balance);
-            command.Parameters.AddWithValue("@UpdatedAt", wallet.UpdatedAt);
+            command.Parameters.AddWithValue("p_id", wallet.Id);
+            command.Parameters.AddWithValue("p_user_id", wallet.UserId);
+            command.Parameters.AddWithValue("p_balance", wallet.Balance);
+            command.Parameters.AddWithValue("p_updated_at", wallet.UpdatedAt);
 
             connection.Open();
             command.ExecuteNonQuery();
 
             return wallet;
         }
-        catch (SqlException ex)
+        catch (PostgresException ex)
         {
             throw new InvalidOperationException($"Database error occurred while creating wallet: {ex.Message}", ex);
         }
@@ -42,11 +43,10 @@ public class WalletRepository : IWalletRepository
     {
         try
         {
-            using var connection = new SqlConnection(_connectionString);
-            using var command = new SqlCommand("sp_GetWalletByUserId", connection);
-            command.CommandType = CommandType.StoredProcedure;
+            using var connection = new NpgsqlConnection(_connectionString);
+            using var command = new NpgsqlCommand("SELECT * FROM sp_get_wallet_by_user_id(@p_user_id)", connection);
 
-            command.Parameters.AddWithValue("@UserId", userId);
+            command.Parameters.AddWithValue("p_user_id", userId);
 
             connection.Open();
             using var reader = command.ExecuteReader();
@@ -58,7 +58,7 @@ public class WalletRepository : IWalletRepository
 
             return null;
         }
-        catch (SqlException ex)
+        catch (PostgresException ex)
         {
             throw new InvalidOperationException($"Database error occurred while retrieving wallet: {ex.Message}", ex);
         }
@@ -68,13 +68,14 @@ public class WalletRepository : IWalletRepository
     {
         try
         {
-            using var connection = new SqlConnection(_connectionString);
-            using var command = new SqlCommand("UPDATE UserWallets SET Balance = @Balance, UpdatedAt = @UpdatedAt WHERE Id = @WalletId", connection);
-            command.CommandType = CommandType.Text;
+            using var connection = new NpgsqlConnection(_connectionString);
+            using var command = new NpgsqlCommand(
+                "UPDATE UserWallets SET Balance = @p_balance, UpdatedAt = @p_updated_at WHERE Id = @p_wallet_id",
+                connection);
 
-            command.Parameters.AddWithValue("@WalletId", walletId);
-            command.Parameters.AddWithValue("@Balance", newBalance);
-            command.Parameters.AddWithValue("@UpdatedAt", DateTime.UtcNow);
+            command.Parameters.AddWithValue("p_wallet_id", walletId);
+            command.Parameters.AddWithValue("p_balance", newBalance);
+            command.Parameters.AddWithValue("p_updated_at", DateTime.UtcNow);
 
             connection.Open();
             var rowsAffected = command.ExecuteNonQuery();
@@ -84,19 +85,19 @@ public class WalletRepository : IWalletRepository
                 throw new InvalidOperationException($"Wallet with ID {walletId} not found");
             }
         }
-        catch (SqlException ex)
+        catch (PostgresException ex)
         {
             throw new InvalidOperationException($"Database error occurred while updating wallet balance: {ex.Message}", ex);
         }
     }
 
-    private static UserWallet MapWalletFromReader(SqlDataReader reader)
+    private static UserWallet MapWalletFromReader(NpgsqlDataReader reader)
     {
         return new UserWallet(
-            id: reader.GetGuid(reader.GetOrdinal("Id")),
-            userId: reader.GetGuid(reader.GetOrdinal("UserId")),
-            balance: reader.GetDecimal(reader.GetOrdinal("Balance")),
-            updatedAt: reader.GetDateTime(reader.GetOrdinal("UpdatedAt"))
+            id: reader.GetGuid(reader.GetOrdinal("id")),
+            userId: reader.GetGuid(reader.GetOrdinal("user_id")),
+            balance: reader.GetDecimal(reader.GetOrdinal("balance")),
+            updatedAt: reader.GetDateTime(reader.GetOrdinal("updated_at"))
         );
     }
 }

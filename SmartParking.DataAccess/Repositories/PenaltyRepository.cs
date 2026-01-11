@@ -1,4 +1,4 @@
-﻿using Microsoft.Data.SqlClient;
+using Npgsql;
 using SmartParking.DataAccess.Interfaces;
 using SmartParking.Domain.Entities;
 using SmartParking.Domain.Exceptions;
@@ -19,41 +19,40 @@ public class PenaltyRepository : IPenaltyRepository
     {
         try
         {
-            using var connection = new SqlConnection(_connectionString);
-            using var command = new SqlCommand("sp_CreatePenalty", connection);
-            command.CommandType = CommandType.StoredProcedure;
+            using var connection = new NpgsqlConnection(_connectionString);
+            using var command = new NpgsqlCommand(
+                "SELECT * FROM sp_create_penalty(@p_reservation_id, @p_amount, @p_reason)",
+                connection);
 
-            command.Parameters.AddWithValue("@ReservationId", penalty.ReservationId);
-            command.Parameters.AddWithValue("@Amount", penalty.Amount);
-            command.Parameters.AddWithValue("@Reason", penalty.Reason);
-
-            var penaltyIdParam = new SqlParameter("@PenaltyId", SqlDbType.UniqueIdentifier)
-            {
-                Direction = ParameterDirection.Output
-            };
-            command.Parameters.Add(penaltyIdParam);
+            command.Parameters.AddWithValue("p_reservation_id", penalty.ReservationId);
+            command.Parameters.AddWithValue("p_amount", penalty.Amount);
+            command.Parameters.AddWithValue("p_reason", penalty.Reason);
 
             connection.Open();
-            command.ExecuteNonQuery();
+            using var reader = command.ExecuteReader();
 
-            var penaltyId = (Guid)penaltyIdParam.Value;
+            if (reader.Read())
+            {
+                var penaltyId = reader.GetGuid(reader.GetOrdinal("penalty_id"));
+                return new Penalty(
+                    id: penaltyId,
+                    reservationId: penalty.ReservationId,
+                    amount: penalty.Amount,
+                    reason: penalty.Reason,
+                    createdAt: DateTime.UtcNow);
+            }
 
-            return new Penalty(
-                id: penaltyId,
-                reservationId: penalty.ReservationId,
-                amount: penalty.Amount,
-                reason: penalty.Reason,
-                createdAt: DateTime.UtcNow);
+            throw new InvalidOperationException("Failed to create penalty");
         }
-        catch (SqlException ex) when (ex.Number == 50204)
+        catch (PostgresException ex) when (ex.SqlState == "45204")
         {
             throw new ReservationNotFoundException(ex.Message, ex);
         }
-        catch (SqlException ex) when (ex.Number is 50208 or 50209)
+        catch (PostgresException ex) when (ex.SqlState is "45208" or "45209")
         {
             throw new InvalidPenaltyException(ex.Message, ex);
         }
-        catch (SqlException ex)
+        catch (PostgresException ex)
         {
             throw new InvalidOperationException($"DB error creating penalty: {ex.Message}", ex);
         }
@@ -65,11 +64,10 @@ public class PenaltyRepository : IPenaltyRepository
         {
             var list = new List<Penalty>();
 
-            using var connection = new SqlConnection(_connectionString);
-            using var command = new SqlCommand("sp_GetPenaltiesByReservationId", connection);
-            command.CommandType = CommandType.StoredProcedure;
+            using var connection = new NpgsqlConnection(_connectionString);
+            using var command = new NpgsqlCommand("SELECT * FROM sp_get_penalties_by_reservation_id(@p_reservation_id)", connection);
 
-            command.Parameters.AddWithValue("@ReservationId", reservationId);
+            command.Parameters.AddWithValue("p_reservation_id", reservationId);
 
             connection.Open();
             using var reader = command.ExecuteReader();
@@ -81,7 +79,7 @@ public class PenaltyRepository : IPenaltyRepository
 
             return list;
         }
-        catch (SqlException ex)
+        catch (PostgresException ex)
         {
             throw new InvalidOperationException($"DB error getting penalties: {ex.Message}", ex);
         }
@@ -93,11 +91,10 @@ public class PenaltyRepository : IPenaltyRepository
         {
             var list = new List<Penalty>();
 
-            using var connection = new SqlConnection(_connectionString);
-            using var command = new SqlCommand("sp_GetPenaltiesByUserId", connection);
-            command.CommandType = CommandType.StoredProcedure;
+            using var connection = new NpgsqlConnection(_connectionString);
+            using var command = new NpgsqlCommand("SELECT * FROM sp_get_penalties_by_user_id(@p_user_id)", connection);
 
-            command.Parameters.AddWithValue("@UserId", userId);
+            command.Parameters.AddWithValue("p_user_id", userId);
 
             connection.Open();
             using var reader = command.ExecuteReader();
@@ -109,19 +106,19 @@ public class PenaltyRepository : IPenaltyRepository
 
             return list;
         }
-        catch (SqlException ex)
+        catch (PostgresException ex)
         {
             throw new InvalidOperationException($"DB error getting penalties by user: {ex.Message}", ex);
         }
     }
 
-    private static Penalty MapPenalty(SqlDataReader reader)
+    private static Penalty MapPenalty(NpgsqlDataReader reader)
     {
         return new Penalty(
-            id: reader.GetGuid(reader.GetOrdinal("Id")),
-            reservationId: reader.GetGuid(reader.GetOrdinal("ReservationId")),
-            amount: reader.GetDecimal(reader.GetOrdinal("Amount")),
-            reason: reader.GetString(reader.GetOrdinal("Reason")),
-            createdAt: reader.GetDateTime(reader.GetOrdinal("CreatedAt")));
+            id: reader.GetGuid(reader.GetOrdinal("id")),
+            reservationId: reader.GetGuid(reader.GetOrdinal("reservation_id")),
+            amount: reader.GetDecimal(reader.GetOrdinal("amount")),
+            reason: reader.GetString(reader.GetOrdinal("reason")),
+            createdAt: reader.GetDateTime(reader.GetOrdinal("created_at")));
     }
 }

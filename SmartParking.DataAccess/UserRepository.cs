@@ -1,4 +1,4 @@
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using SmartParking.Domain;
 using SmartParking.Domain.Exceptions;
 using System.Data;
@@ -18,36 +18,36 @@ public class UserRepository : IUserRepository
     {
         try
         {
-            using var connection = new SqlConnection(_connectionString);
-            using var command = new SqlCommand("sp_CreateUser", connection);
-            command.CommandType = CommandType.StoredProcedure;
+            using var connection = new NpgsqlConnection(_connectionString);
+            using var command = new NpgsqlCommand(
+                "SELECT * FROM sp_create_user(@p_email, @p_full_name, @p_is_ev_user, @p_initial_balance)",
+                connection);
 
-            command.Parameters.AddWithValue("@Email", user.Email);
-            command.Parameters.AddWithValue("@FullName", user.FullName);
-            command.Parameters.AddWithValue("@IsEVUser", user.IsEVUser);
-            command.Parameters.AddWithValue("@InitialBalance", 100.00m);
-
-            var userIdParam = new SqlParameter("@UserId", SqlDbType.UniqueIdentifier)
-            {
-                Direction = ParameterDirection.Output
-            };
-            command.Parameters.Add(userIdParam);
+            command.Parameters.AddWithValue("p_email", user.Email);
+            command.Parameters.AddWithValue("p_full_name", user.FullName);
+            command.Parameters.AddWithValue("p_is_ev_user", user.IsEVUser);
+            command.Parameters.AddWithValue("p_initial_balance", 100.00m);
 
             connection.Open();
-            command.ExecuteNonQuery();
+            using var reader = command.ExecuteReader();
 
-            var userId = (Guid)userIdParam.Value;
-            return new User(userId, user.Email, user.FullName, user.IsEVUser, DateTime.UtcNow, true);
+            if (reader.Read())
+            {
+                var userId = reader.GetGuid(reader.GetOrdinal("user_id"));
+                return new User(userId, user.Email, user.FullName, user.IsEVUser, DateTime.UtcNow, true);
+            }
+
+            throw new InvalidOperationException("Failed to create user");
         }
-        catch (SqlException ex) when (ex.Number == 50004)
+        catch (PostgresException ex) when (ex.SqlState == "45004")
         {
             throw new InvalidUserDataException($"Email already exists: {user.Email}", ex);
         }
-        catch (SqlException ex) when (ex.Number >= 50001 && ex.Number <= 50003)
+        catch (PostgresException ex) when (ex.SqlState is "45001" or "45002" or "45003")
         {
             throw new InvalidUserDataException(ex.Message, ex);
         }
-        catch (SqlException ex)
+        catch (PostgresException ex)
         {
             throw new InvalidOperationException($"Database error occurred while creating user: {ex.Message}", ex);
         }
@@ -57,11 +57,10 @@ public class UserRepository : IUserRepository
     {
         try
         {
-            using var connection = new SqlConnection(_connectionString);
-            using var command = new SqlCommand("sp_GetUserById", connection);
-            command.CommandType = CommandType.StoredProcedure;
+            using var connection = new NpgsqlConnection(_connectionString);
+            using var command = new NpgsqlCommand("SELECT * FROM sp_get_user_by_id(@p_user_id)", connection);
 
-            command.Parameters.AddWithValue("@UserId", id);
+            command.Parameters.AddWithValue("p_user_id", id);
 
             connection.Open();
             using var reader = command.ExecuteReader();
@@ -73,7 +72,7 @@ public class UserRepository : IUserRepository
 
             return null;
         }
-        catch (SqlException ex)
+        catch (PostgresException ex)
         {
             throw new InvalidOperationException($"Database error occurred while retrieving user: {ex.Message}", ex);
         }
@@ -83,11 +82,10 @@ public class UserRepository : IUserRepository
     {
         try
         {
-            using var connection = new SqlConnection(_connectionString);
-            using var command = new SqlCommand("sp_GetUserByEmail", connection);
-            command.CommandType = CommandType.StoredProcedure;
+            using var connection = new NpgsqlConnection(_connectionString);
+            using var command = new NpgsqlCommand("SELECT * FROM sp_get_user_by_email(@p_email)", connection);
 
-            command.Parameters.AddWithValue("@Email", email);
+            command.Parameters.AddWithValue("p_email", email);
 
             connection.Open();
             using var reader = command.ExecuteReader();
@@ -99,7 +97,7 @@ public class UserRepository : IUserRepository
 
             return null;
         }
-        catch (SqlException ex)
+        catch (PostgresException ex)
         {
             throw new InvalidOperationException($"Database error occurred while retrieving user by email: {ex.Message}", ex);
         }
@@ -109,28 +107,21 @@ public class UserRepository : IUserRepository
     {
         try
         {
-            using var connection = new SqlConnection(_connectionString);
-            using var command = new SqlCommand("sp_UpdateUser", connection);
-            command.CommandType = CommandType.StoredProcedure;
+            using var connection = new NpgsqlConnection(_connectionString);
+            using var command = new NpgsqlCommand("SELECT sp_update_user(@p_user_id, @p_full_name, @p_is_ev_user)", connection);
 
-            command.Parameters.AddWithValue("@UserId", user.Id);
-            command.Parameters.AddWithValue("@FullName", user.FullName);
-            command.Parameters.AddWithValue("@IsEVUser", user.IsEVUser);
-            command.Parameters.AddWithValue("@IsActive", user.IsActive);
+            command.Parameters.AddWithValue("p_user_id", user.Id);
+            command.Parameters.AddWithValue("p_full_name", user.FullName);
+            command.Parameters.AddWithValue("p_is_ev_user", user.IsEVUser);
 
             connection.Open();
-            var rowsAffected = command.ExecuteNonQuery();
-
-            if (rowsAffected == 0)
-            {
-                throw new UserNotFoundException($"User with ID {user.Id} not found");
-            }
+            command.ExecuteNonQuery();
         }
-        catch (SqlException ex) when (ex.Number >= 50001 && ex.Number <= 50003)
+        catch (PostgresException ex) when (ex.SqlState is "45002" or "45005")
         {
             throw new InvalidUserDataException(ex.Message, ex);
         }
-        catch (SqlException ex)
+        catch (PostgresException ex)
         {
             throw new InvalidOperationException($"Database error occurred while updating user: {ex.Message}", ex);
         }
@@ -140,11 +131,10 @@ public class UserRepository : IUserRepository
     {
         try
         {
-            using var connection = new SqlConnection(_connectionString);
-            using var command = new SqlCommand("DELETE FROM Users WHERE Id = @UserId", connection);
-            command.CommandType = CommandType.Text;
+            using var connection = new NpgsqlConnection(_connectionString);
+            using var command = new NpgsqlCommand("DELETE FROM Users WHERE Id = @p_user_id", connection);
 
-            command.Parameters.AddWithValue("@UserId", id);
+            command.Parameters.AddWithValue("p_user_id", id);
 
             connection.Open();
             var rowsAffected = command.ExecuteNonQuery();
@@ -154,21 +144,21 @@ public class UserRepository : IUserRepository
                 throw new UserNotFoundException($"User with ID {id} not found");
             }
         }
-        catch (SqlException ex)
+        catch (PostgresException ex)
         {
             throw new InvalidOperationException($"Database error occurred while deleting user: {ex.Message}", ex);
         }
     }
 
-    private static User MapUserFromReader(SqlDataReader reader)
+    private static User MapUserFromReader(NpgsqlDataReader reader)
     {
         return new User(
-            id: reader.GetGuid(reader.GetOrdinal("Id")),
-            email: reader.GetString(reader.GetOrdinal("Email")),
-            fullName: reader.GetString(reader.GetOrdinal("FullName")),
-            isEVUser: reader.GetBoolean(reader.GetOrdinal("IsEVUser")),
-            createdAt: reader.GetDateTime(reader.GetOrdinal("CreatedAt")),
-            isActive: reader.GetBoolean(reader.GetOrdinal("IsActive"))
+            id: reader.GetGuid(reader.GetOrdinal("id")),
+            email: reader.GetString(reader.GetOrdinal("email")),
+            fullName: reader.GetString(reader.GetOrdinal("full_name")),
+            isEVUser: reader.GetBoolean(reader.GetOrdinal("is_ev_user")),
+            createdAt: reader.GetDateTime(reader.GetOrdinal("created_at")),
+            isActive: reader.GetBoolean(reader.GetOrdinal("is_active"))
         );
     }
 }
